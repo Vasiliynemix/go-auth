@@ -67,20 +67,25 @@ func TestRegisterRequestValidation(t *testing.T) {
 	}
 
 	for _, testCase := range testCases {
-		valid, err := testCase.Request.Validate()
+		valid, err := testCase.Request.Validate(RegisterRequestValidationConfig{
+			LoginRequired:     true,
+			PasswordRequired:  true,
+			PasswordEqual:     true,
+			PasswordMinLength: 8,
+		})
 		require.Equal(t, testCase.Valid, valid)
 		require.Equal(t, testCase.Error, err)
 	}
 }
 
 func TestRegisterControllerCreation(t *testing.T) {
-	c := NewRegisterController(nil, nil)
+	c := NewRegisterController(nil, nil, nil)
 	require.Equal(t, c, &RegisterController{})
 	require.Equal(t, "/register", c.GetHandlers()[0].GetPath())
 	require.Equal(t, "POST", c.GetHandlers()[0].GetMethod())
 }
 
 func TestRegisterControllerGroup(t *testing.T) {
-	c := NewRegisterController(nil, nil)
+	c := NewRegisterController(nil, nil, nil)
 	require.Equal(t, "/auth", c.GetGroup())
 }

@@ -59,9 +59,10 @@ func (ws *WebServer) RegisterRoutes(routes []controllers.GroupController) {
 	}
 }
 
-func (ws *WebServer) Run(logger *zap.Logger, mongoClient *mongodb.MongoDB, db *sqlx.DB) {
+func (ws *WebServer) Run(cfg *config.AppConfig, logger *zap.Logger, mongoClient *mongodb.MongoDB, db *sqlx.DB) {
 	ws.RegisterRoutes([]controllers.GroupController{
 		controllers.NewAuthController(
+			cfg,
 			logger,
 			services.NewUserService(logger, mongoClient, db),
 		),

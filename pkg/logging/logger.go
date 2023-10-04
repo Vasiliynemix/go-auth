@@ -1,37 +1,52 @@
 package logging
 
 import (
-	"encoding/json"
-	"fmt"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 	"os"
+	"path/filepath"
+	"tutorial-auth/internal/config"
 )
 
-const (
-	LogsDir = "logs"
-)
+func NewLogger(cfg *config.LoggingConfig, name string) *zap.Logger {
+	_ = os.Mkdir(cfg.Path, os.ModePerm)
 
-func NewLogger(name string) *zap.Logger {
-	_ = os.Mkdir(LogsDir, os.ModePerm)
-
-	rawJSON := []byte(fmt.Sprintf(`{
-	  "level": "debug",
-	  "encoding": "json",
-	  "outputPaths": ["stdout", "./logs/%s"],
-	  "errorOutputPaths": ["stderr"],
-	  "encoderConfig": {
-	    "messageKey": "message",
-	    "levelKey": "level",
-	    "levelEncoder": "lowercase"
-	  }
-	}`, name))
-
-	var cfg zap.Config
-	if err := json.Unmarshal(rawJSON, &cfg); err != nil {
-		panic(err)
-	}
-	logger := zap.Must(cfg.Build())
-	defer logger.Sync()
-
+	logger := zap.New(configure(cfg, name))
 	return logger
+}
+
+func configure(cfg *config.LoggingConfig, name string) zapcore.Core {
+	fileWriter := zapcore.AddSync(&lumberjack.Logger{
+		Filename:   filepath.Join(cfg.Path, name),
+		MaxSize:    cfg.MaxSize, // megabytes
+		MaxBackups: cfg.MaxBackups,
+		MaxAge:     cfg.MaxAge, // days
+	})
+
+	var priority zap.LevelEnablerFunc
+
+	switch cfg.Level {
+	case "debug":
+		priority = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+			return lvl >= zap.DebugLevel
+		})
+	case "warn":
+		priority = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+			return lvl >= zap.WarnLevel
+		})
+	default:
+		priority = zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+			return lvl >= zap.InfoLevel
+		})
+	}
+
+	consoleWriter := zapcore.Lock(os.Stdout)
+	jsonEncoder := zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig())
+	consoleEncoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+
+	return zapcore.NewTee(
+		zapcore.NewCore(consoleEncoder, consoleWriter, priority),
+		zapcore.NewCore(jsonEncoder, fileWriter, priority),
+	)
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"github.com/fsnotify/fsnotify"
 	"github.com/spf13/viper"
 	"time"
 )
@@ -15,8 +16,8 @@ type DBConnectionConfig struct {
 	Host     string
 	Port     int
 	Database string
-	Username string
-	Password string
+	Username string `json:"-"`
+	Password string `json:"-"`
 	Pool     struct {
 		MaxIdleConns int           `mapstructure:"max_idle_conns"`
 		MaxOpenConns int           `mapstructure:"max_open_conns"`
@@ -28,30 +29,68 @@ type MongoDbConnectionConfig struct {
 	Host     string
 	Port     int
 	Database string
-	Username string
-	Password string
+	Username string `json:"-"`
+	Password string `json:"-"`
+}
+
+type AppConfig struct {
+	Name              string
+	PasswordLifeTime  int `mapstructure:"password_life_time"` //in hours
+	PasswordMinLength int `mapstructure:"password_min_length"`
+}
+
+type LoggingConfig struct {
+	Level      string
+	Path       string
+	MaxSize    int `mapstructure:"max_size"`
+	MaxBackups int `mapstructure:"max_backups"`
+	MaxAge     int `mapstructure:"max_age"`
 }
 
 type Config struct {
-	Mongo MongoDbConnectionConfig `mapstructure:"mongo"`
-	Web   WebServerConfig         `mapstructure:"web"`
-	Db    DBConnectionConfig      `mapstructure:"db"`
+	Debug   bool                    `mapstructure:"debug"`
+	App     *AppConfig              `mapstructure:"app"`
+	Logging LoggingConfig           `mapstructure:"logging"`
+	Mongo   MongoDbConnectionConfig `mapstructure:"mongo"`
+	Web     WebServerConfig         `mapstructure:"web"`
+	Db      DBConnectionConfig      `mapstructure:"db"`
 }
 
+var C = new(Config)
+
 func InitConfiguration() *Config {
-	var C = new(Config)
-
-	LoadDefault()
-	LoadFile()
-
-	err := viper.Unmarshal(C)
-	if err != nil {
-		panic(err)
-	}
+	initConfig()
+	viper.WatchConfig()
+	viper.OnConfigChange(func(e fsnotify.Event) {
+		initConfig()
+	})
 	return C
 }
 
+func initConfig() {
+	LoadDefault()
+	LoadFile()
+	LoadEnv()
+
+	if viper.GetBool("debug") {
+		viper.SetDefault("logging.level", "debug")
+	}
+
+	viper.Unmarshal(C)
+}
+
 func LoadDefault() {
+	viper.SetDefault("debug", false)
+	viper.SetDefault("app.name", "tutorial-auth")
+	viper.SetDefault("app.password_life_time", 1)
+	viper.SetDefault("app.password_min_length", 8)
+
+	viper.SetDefault("logging.level", "info")
+	viper.SetDefault("logging.path", "logs")
+	viper.SetDefault("logging.max_size", 500)
+	viper.SetDefault("logging.max_backups", 3)
+	viper.SetDefault("logging.max_age", 30)
+
 	viper.SetDefault("mongo.host", "localhost")
 	viper.SetDefault("mongo.port", 27018)
 	viper.SetDefault("mongo.database", "mongo-auth-db")
@@ -71,12 +110,23 @@ func LoadDefault() {
 	viper.SetDefault("db.pool.idle_timeout", 300*time.Second)
 }
 
+func LoadEnv() {
+	viper.SetEnvPrefix("auth")
+	viper.AutomaticEnv()
+}
+
 func LoadFile() {
 	viper.SetConfigName("config")
-	viper.AddConfigPath(".")
 	viper.SetConfigType("yaml")
+
+	viper.AddConfigPath(".")
+	viper.AddConfigPath("./config/")
+	viper.AddConfigPath(fmt.Sprintf("$HOME/.%s", viper.GetString("app.name")))
+	viper.AddConfigPath(fmt.Sprintf("/etc/%s/", viper.GetString("app.name")))
+	viper.AddConfigPath(fmt.Sprintf("/etc/%s/config/", viper.GetString("app.name")))
+
 	err := viper.ReadInConfig()
 	if err != nil {
-		fmt.Println(fmt.Sprintf("failed to read config file, %s", err))
+		fmt.Println(fmt.Sprintf("failed to read config file, %s. Use default values.", err))
 	}
 }

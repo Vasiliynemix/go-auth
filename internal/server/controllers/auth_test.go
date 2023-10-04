@@ -52,13 +52,13 @@ func TestAuthRequestValidation(t *testing.T) {
 }
 
 func TestAuthControllerCreation(t *testing.T) {
-	c := NewAuthController(nil, nil)
+	c := NewAuthController(nil, nil, nil)
 	require.Equal(t, c, &AuthController{})
 	require.Equal(t, "/", c.GetHandlers()[0].GetPath())
 	require.Equal(t, "POST", c.GetHandlers()[0].GetMethod())
 }
 
 func TestAuthControllerGroup(t *testing.T) {
-	c := NewAuthController(nil, nil)
+	c := NewAuthController(nil, nil, nil)
 	require.Equal(t, "/auth", c.GetGroup())
 }

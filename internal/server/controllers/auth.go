@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/gofiber/fiber/v2"
 	"go.uber.org/zap"
+	"tutorial-auth/internal/config"
 	"tutorial-auth/internal/mongodb/models"
 	"tutorial-auth/internal/services"
 )
@@ -41,12 +42,14 @@ type AuthResponseOK struct {
 }
 
 type AuthController struct {
+	cfg         *config.AppConfig
 	logger      *zap.Logger
 	userService *services.UserService
 }
 
-func NewAuthController(logger *zap.Logger, userService *services.UserService) *AuthController {
+func NewAuthController(cfg *config.AppConfig, logger *zap.Logger, userService *services.UserService) *AuthController {
 	return &AuthController{
+		cfg:         cfg,
 		logger:      logger,
 		userService: userService,
 	}

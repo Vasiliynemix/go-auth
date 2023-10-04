@@ -12,11 +12,19 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 	"time"
+	"tutorial-auth/internal/config"
 	"tutorial-auth/internal/mongodb"
 	"tutorial-auth/internal/mongodb/models"
 )
 
 var UserAlreadyExistsError = fmt.Errorf("user already exists")
+
+type NewUser struct {
+	Login    string `json:"login"`
+	Password string `json:"password"`
+	Name     string `json:"name"`
+	LastName string `json:"last_name,omitempty"`
+}
 
 type UserService struct {
 	logger      *zap.Logger
@@ -56,59 +64,61 @@ func (us *UserService) GetByLogin(login string) (*models.User, error) {
 	return user, nil
 }
 
-func (us *UserService) Register(login string, password string) (*models.User, error) {
-	//var user *models.User
+func (us *UserService) Register(ctx context.Context, nur *NewUser) (*models.User, error) {
+	var user *models.User
 	collection := us.mongoClient.GetCollection(us.collection)
 
-	existedUser, err := us.GetByLogin(login)
-	us.logger.Info("checking if user already exists", zap.String("login", login), zap.Error(err))
-	if err != nil {
-		return nil, err
-	}
+	existedUser, err := us.GetByLogin(nur.Login)
+	us.logger.Info("checking if user already exists", zap.String("login", nur.Login), zap.Error(err))
 	if existedUser != nil {
 		return nil, UserAlreadyExistsError
 	}
 
+	if err != nil {
+		return nil, err
+	}
+
 	userGUID := uuid.New().String()
-	timeNow := time.Now().Local()
 	newUser := &models.User{
 		GUID:      userGUID,
-		Login:     login,
+		Login:     nur.Login,
 		LoginType: models.LoginType{ID: 1, Name: "email"},
-		Name:      "",
-		LastName:  "",
-		CreatedAt: timeNow,
+		Name:      nur.Name,
+		LastName:  nur.LastName,
+		CreatedAt: time.Now().Local(),
 	}
-	insertResult, err := collection.InsertOne(context.TODO(), newUser)
+	insertResult, err := collection.InsertOne(ctx, newUser)
 	if err != nil {
 		return nil, err
 	}
 
 	sql := `INSERT INTO passwords (user_id, password, expires_at) VALUES ($1, $2, $3)`
-	hashedPass, err := us.HashPassword(password)
+	hashedPass, err := us.HashPassword(nur.Password)
 	if err != nil {
 		us.logger.Error("failed to hashing password", zap.Error(err))
-		errDelete := us.DeleteByID(insertResult.InsertedID.(primitive.ObjectID))
+		errDelete := us.DeleteByID(ctx, insertResult.InsertedID.(primitive.ObjectID))
 		if errDelete != nil {
 			return nil, errDelete
 		}
 		return nil, err
 	}
-	_, err = us.dbClient.Exec(sql, userGUID, hashedPass, timeNow)
+
+	cfg := ctx.Value("cfg").(*config.AppConfig)
+	_, err = us.dbClient.ExecContext(ctx, sql, userGUID, hashedPass, time.Now().Local().Add(time.Duration(cfg.PasswordLifeTime)*time.Hour))
 	if err != nil {
 		us.logger.Error("failed to inserting password", zap.Error(err))
-		errDelete := us.DeleteByID(insertResult.InsertedID.(primitive.ObjectID))
+		errDelete := us.DeleteByID(ctx, insertResult.InsertedID.(primitive.ObjectID))
 		if errDelete != nil {
 			return nil, errDelete
 		}
 		return nil, err
 	}
-	return newUser, nil
+	return user, nil
 }
 
-func (us *UserService) DeleteByID(id primitive.ObjectID) error {
+func (us *UserService) DeleteByID(ctx context.Context, id primitive.ObjectID) error {
 	collection := us.mongoClient.GetCollection(us.collection)
-	_, err := collection.DeleteOne(context.TODO(), bson.M{"_id": id})
+	_, err := collection.DeleteOne(ctx, bson.M{"_id": id})
 	if err != nil {
 		return err
 	}

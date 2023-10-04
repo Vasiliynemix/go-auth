@@ -24,8 +24,8 @@ func main() {
 	const op = "cmd.main.main"
 	cfg := config.InitConfiguration()
 
-	logger := logging.NewLogger("auth.log")
-	logger.Info("starting application", zap.String("op", op))
+	logger := logging.NewLogger(&cfg.Logging, "auth.log")
+	logger.Debug("run this configuration", zap.Any("config", cfg), zap.String("op", op))
 
 	mongoClient := mongodb.NewMongoDB(logger, &cfg.Mongo)
 	defer mongoClient.Disconnect()
@@ -56,8 +56,8 @@ func main() {
 	logger.Info("applied migrations", zap.String("op", op))
 
 	wApp := server.NewWebServer(logger, &cfg.Web)
-	registerRoutes(logger, mongoClient, db, wApp)
-	go wApp.Run(logger, mongoClient, db)
+	registerRoutes(cfg.App, logger, mongoClient, db, wApp)
+	go wApp.Run(cfg.App, logger, mongoClient, db)
 
 	// Graceful shutdown
 	SigCh := make(chan os.Signal)
@@ -66,14 +66,14 @@ func main() {
 	logger.Info("received signal", zap.String("signal", takeSig.String()))
 }
 
-func registerRoutes(logger *zap.Logger, mongoClient *mongodb.MongoDB, db *sqlx.DB, wApp *server.WebServer) {
+func registerRoutes(cfg *config.AppConfig, logger *zap.Logger, mongoClient *mongodb.MongoDB, db *sqlx.DB, wApp *server.WebServer) {
 	const op = "cmd.main.registerRoutes"
 	logger.Info("registering routes", zap.String("op", op))
 
 	userService := services.NewUserService(logger, mongoClient, db)
 
 	wApp.RegisterRoutes([]controllers.GroupController{
-		controllers.NewAuthController(logger, userService),
-		controllers.NewRegisterController(logger, userService),
+		controllers.NewAuthController(cfg, logger, userService),
+		controllers.NewRegisterController(cfg, logger, userService),
 	})
 }
