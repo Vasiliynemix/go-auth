@@ -64,6 +64,18 @@ func (us *UserService) GetByLogin(login string) (*models.User, error) {
 	return user, nil
 }
 
+func (us *UserService) GetPassword(guid string) (string, error) {
+	var password string
+
+	query := "SELECT password FROM passwords WHERE user_id = $1 AND expires_at > $2 ORDER BY expires_at DESC LIMIT 1"
+
+	err := us.dbClient.QueryRow(query, guid, time.Now()).Scan(&password)
+	if err != nil {
+		return "", err
+	}
+	return password, nil
+}
+
 func (us *UserService) Register(ctx context.Context, nur *NewUser) (*models.User, error) {
 	var user *models.User
 	collection := us.mongoClient.GetCollection(us.collection)
@@ -85,7 +97,7 @@ func (us *UserService) Register(ctx context.Context, nur *NewUser) (*models.User
 		LoginType: models.LoginType{ID: 1, Name: "email"},
 		Name:      nur.Name,
 		LastName:  nur.LastName,
-		CreatedAt: time.Now().Local(),
+		CreatedAt: time.Now(),
 	}
 	insertResult, err := collection.InsertOne(ctx, newUser)
 	if err != nil {
@@ -104,7 +116,7 @@ func (us *UserService) Register(ctx context.Context, nur *NewUser) (*models.User
 	}
 
 	cfg := ctx.Value("cfg").(*config.AppConfig)
-	_, err = us.dbClient.ExecContext(ctx, sql, userGUID, hashedPass, time.Now().Local().Add(time.Duration(cfg.PasswordLifeTime)*time.Hour))
+	_, err = us.dbClient.ExecContext(ctx, sql, userGUID, hashedPass, time.Now().Add(time.Duration(cfg.PasswordLifeTime)*time.Hour))
 	if err != nil {
 		us.logger.Error("failed to inserting password", zap.Error(err))
 		errDelete := us.DeleteByID(ctx, insertResult.InsertedID.(primitive.ObjectID))
@@ -136,4 +148,34 @@ func (us *UserService) HashPassword(password string) (string, error) {
 func (us *UserService) CheckPasswordHash(password string, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
+}
+
+func (us *UserService) UpdateRefreshToken(guid string, refreshToken string) error {
+	collection := us.mongoClient.GetCollection(us.collection)
+	_, err := collection.UpdateOne(context.TODO(), bson.M{"guid": guid}, bson.M{"$set": bson.M{"refresh_token": refreshToken}})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (us *UserService) UpdateLastLoginAt(guid string) error {
+	collection := us.mongoClient.GetCollection(us.collection)
+	_, err := collection.UpdateOne(context.TODO(), bson.M{"guid": guid}, bson.M{"$set": bson.M{"last_login_at": time.Now()}})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (us *UserService) UpdateRefreshTokenAndLastLoginAt(guid string, refreshToken string) error {
+	collection := us.mongoClient.GetCollection(us.collection)
+	_, err := collection.UpdateOne(context.TODO(), bson.M{"guid": guid}, bson.M{"$set": bson.M{
+		"refresh_token": refreshToken,
+		"last_login_at": time.Now(),
+	}})
+	if err != nil {
+		return err
+	}
+	return nil
 }

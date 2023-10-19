@@ -71,9 +71,10 @@ func registerRoutes(cfg *config.AppConfig, logger *zap.Logger, mongoClient *mong
 	logger.Info("registering routes", zap.String("op", op))
 
 	userService := services.NewUserService(logger, mongoClient, db)
+	authService := services.NewAuthService(cfg, logger, userService)
 
 	wApp.RegisterRoutes([]controllers.GroupController{
-		controllers.NewAuthController(cfg, logger, userService),
+		controllers.NewAuthController(cfg, logger, authService),
 		controllers.NewRegisterController(cfg, logger, userService),
 	})
 }

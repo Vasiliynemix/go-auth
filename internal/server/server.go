@@ -64,7 +64,7 @@ func (ws *WebServer) Run(cfg *config.AppConfig, logger *zap.Logger, mongoClient 
 		controllers.NewAuthController(
 			cfg,
 			logger,
-			services.NewUserService(logger, mongoClient, db),
+			services.NewAuthService(cfg, logger, services.NewUserService(logger, mongoClient, db)),
 		),
 	})
 	ws.client.Listen(fmt.Sprintf(":%d", ws.cfg.Port))

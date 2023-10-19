@@ -34,9 +34,12 @@ type MongoDbConnectionConfig struct {
 }
 
 type AppConfig struct {
-	Name              string
-	PasswordLifeTime  int `mapstructure:"password_life_time"` //in hours
-	PasswordMinLength int `mapstructure:"password_min_length"`
+	Name                              string
+	PasswordLifeTime                  int    `mapstructure:"password_life_time"` // in hours
+	PasswordMinLength                 int    `mapstructure:"password_min_length"`
+	TokenExpirationTimeMinutes        int    `mapstructure:"token_expiration_time_minutes"`         // in minutes
+	RefreshTokenExpirationTimeMinutes int    `mapstructure:"refresh_token_expiration_time_minutes"` // in minutes
+	TokenSecret                       string `mapstructure:"token_secret"`
 }
 
 type LoggingConfig struct {
@@ -84,6 +87,9 @@ func LoadDefault() {
 	viper.SetDefault("app.name", "tutorial-auth")
 	viper.SetDefault("app.password_life_time", 1)
 	viper.SetDefault("app.password_min_length", 8)
+	viper.SetDefault("app.token_expiration_time_minutes", 5)
+	viper.SetDefault("app.refresh_token_expiration_time_hours", 60)
+	viper.SetDefault("app.token_secret", "secret")
 
 	viper.SetDefault("logging.level", "info")
 	viper.SetDefault("logging.path", "logs")
